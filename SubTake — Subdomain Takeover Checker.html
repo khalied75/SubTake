@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SubTake — Subdomain Takeover Checker</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080c14;--s1:#0f1522;--s2:#161f30;
+  --border:#1e2d45;--b2:#263348;
+  --text:#c8d6e8;--muted:#4e6278;
+  --cyan:#00c2e0;--green:#00d68f;--red:#ff3b5c;
+  --amber:#ffb347;--purple:#a78bfa;
+  --mono:'JetBrains Mono',monospace;
+  --sans:'Space Grotesk',sans-serif;--r:8px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;display:flex;flex-direction:column;}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;gap:14px;padding:0 22px;height:52px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:15px;color:var(--text);}
+.logo-icon{color:var(--purple);font-size:18px;}
+.logo-tag{font-family:var(--mono);font-size:11px;color:var(--muted);margin-left:2px;}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.badge{font-size:10px;padding:3px 9px;border-radius:4px;font-family:var(--mono);font-weight:600;}
+.badge-doh{background:#a78bfa15;color:var(--purple);border:1px solid #a78bfa30;}
+
+/* WORKSPACE */
+.workspace{flex:1;display:flex;min-height:0;}
+
+/* LEFT PANEL — input */
+.input-panel{width:310px;flex-shrink:0;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:18px 16px;gap:14px;overflow-y:auto;}
+.input-panel::-webkit-scrollbar{width:4px;}
+.input-panel::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px;}
+
+.sec-title{font-size:10px;font-weight:600;color:var(--muted);font-family:var(--mono);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;}
+
+.target-textarea{
+  width:100%;background:var(--bg);border:1px solid var(--b2);
+  color:var(--text);padding:10px 12px;border-radius:var(--r);
+  font-family:var(--mono);font-size:12px;resize:vertical;
+  min-height:130px;line-height:1.6;
+}
+.target-textarea::placeholder{color:var(--muted);}
+.target-textarea:focus{outline:none;border-color:var(--cyan);}
+
+.options-grid{display:flex;flex-direction:column;gap:8px;}
+.option-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.opt-label{font-size:12px;color:var(--muted);}
+.opt-select{background:var(--bg);border:1px solid var(--b2);color:var(--text);padding:5px 8px;border-radius:6px;font-family:var(--mono);font-size:11px;cursor:pointer;}
+.opt-select:focus{outline:none;border-color:var(--cyan);}
+.cb-row{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);cursor:pointer;}
+.cb-row input{accent-color:var(--cyan);}
+
+.run-btn{
+  width:100%;padding:11px;background:var(--cyan);color:#000;
+  border:none;border-radius:var(--r);font-family:var(--sans);
+  font-size:13px;font-weight:700;cursor:pointer;transition:opacity .15s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.run-btn:hover{opacity:.87;}
+.run-btn:active{transform:scale(.98);}
+.run-btn:disabled{opacity:.4;cursor:not-allowed;}
+.stop-btn{
+  width:100%;padding:9px;background:transparent;color:var(--red);
+  border:1px solid #ff3b5c40;border-radius:var(--r);
+  font-family:var(--mono);font-size:12px;cursor:pointer;
+  display:none;
+}
+.stop-btn:hover{background:var(--red);color:#fff;}
+
+/* progress */
+.progress-wrap{display:none;}
+.progress-label{display:flex;justify-content:space-between;font-size:11px;font-family:var(--mono);color:var(--muted);margin-bottom:5px;}
+.progress-bar-bg{background:var(--bg);border:1px solid var(--b2);border-radius:4px;height:6px;overflow:hidden;}
+.progress-bar-fill{height:100%;background:var(--cyan);border-radius:4px;transition:width .2s;width:0%;}
+
+/* fingerprint list */
+.fp-list{display:flex;flex-direction:column;gap:5px;max-height:220px;overflow-y:auto;}
+.fp-list::-webkit-scrollbar{width:3px;}
+.fp-list::-webkit-scrollbar-thumb{background:var(--b2);}
+.fp-item{display:flex;align-items:center;gap:7px;font-size:11px;font-family:var(--mono);}
+.fp-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.fp-name{color:var(--muted);}
+
+/* MAIN AREA */
+.main-area{flex:1;display:flex;flex-direction:column;min-width:0;}
+
+/* stats strip */
+.stats-strip{
+  display:flex;align-items:center;gap:0;
+  background:var(--s1);border-bottom:1px solid var(--border);
+  flex-shrink:0;padding:0 8px;
+}
+.stat-chip{
+  display:flex;align-items:center;gap:6px;
+  padding:10px 14px;font-family:var(--mono);font-size:12px;
+  border-right:1px solid var(--border);cursor:pointer;
+  transition:background .1s;
+}
+.stat-chip:hover{background:var(--s2);}
+.stat-chip.active{background:var(--s2);}
+.stat-chip .dot{width:8px;height:8px;border-radius:50%;}
+.stat-chip .num{font-weight:700;}
+.stat-chip.all .num{color:var(--text);}
+.stat-chip.vuln .dot{background:var(--red);box-shadow:0 0 6px var(--red);}
+.stat-chip.vuln .num{color:var(--red);}
+.stat-chip.potential .dot{background:var(--amber);}
+.stat-chip.potential .num{color:var(--amber);}
+.stat-chip.safe .dot{background:var(--green);}
+.stat-chip.safe .num{color:var(--green);}
+.stat-chip.err .dot{background:var(--muted);}
+.stat-chip.err .num{color:var(--muted);}
+
+.export-btn{
+  margin-left:auto;padding:6px 14px;background:var(--s2);
+  border:1px solid var(--b2);color:var(--muted);
+  border-radius:6px;font-family:var(--mono);font-size:11px;cursor:pointer;
+  transition:all .15s;
+}
+.export-btn:hover{color:var(--cyan);border-color:var(--cyan);}
+
+/* TABLE */
+.table-wrap{flex:1;overflow-y:auto;}
+.table-wrap::-webkit-scrollbar{width:5px;}
+.table-wrap::-webkit-scrollbar-thumb{background:var(--b2);border-radius:4px;}
+
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead{position:sticky;top:0;z-index:5;}
+thead th{
+  background:var(--s1);border-bottom:1px solid var(--border);
+  padding:10px 14px;text-align:left;font-family:var(--mono);
+  font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.8px;
+  white-space:nowrap;
+}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:hover{background:var(--s1);}
+td{padding:11px 14px;vertical-align:middle;}
+.td-domain{font-family:var(--mono);color:var(--text);font-size:12px;word-break:break-all;}
+.td-cname{font-family:var(--mono);color:var(--muted);font-size:11px;word-break:break-all;}
+.td-service{font-size:12px;font-weight:500;}
+.td-details{font-size:11px;color:var(--muted);font-family:var(--mono);max-width:220px;word-break:break-word;line-height:1.5;}
+
+/* status badges */
+.status-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10px;font-weight:700;padding:3px 9px;
+  border-radius:4px;font-family:var(--mono);white-space:nowrap;
+}
+.sb-vuln    {background:var(--red);color:#fff;}
+.sb-potential{background:#ffb34720;color:var(--amber);border:1px solid #ffb34740;}
+.sb-safe    {background:#00d68f15;color:var(--green);border:1px solid #00d68f30;}
+.sb-checking{background:var(--s2);color:var(--muted);border:1px solid var(--b2);}
+.sb-error   {background:var(--s2);color:var(--muted);border:1px solid var(--b2);}
+
+/* spinner cell */
+.spin-sm{width:12px;height:12px;border:2px solid var(--b2);border-top-color:var(--cyan);border-radius:50%;animation:spin .6s linear infinite;display:inline-block;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* empty state */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;height:100%;color:var(--muted);}
+.empty-icon{font-size:40px;opacity:.2;}
+.empty-t{font-size:14px;font-weight:600;opacity:.5;}
+.empty-s{font-size:11px;font-family:var(--mono);opacity:.35;}
+
+/* detail expand */
+.expand-toggle{cursor:pointer;color:var(--cyan);font-size:10px;font-family:var(--mono);margin-left:4px;opacity:.7;}
+.expand-toggle:hover{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <span class="logo-icon">◈</span>
+    SubTake
+    <span class="logo-tag">/ subdomain takeover checker</span>
+  </div>
+  <div class="topbar-right">
+    <span class="badge badge-doh">DNS-over-HTTPS</span>
+  </div>
+</div>
+
+<div class="workspace">
+
+  <!-- INPUT PANEL -->
+  <div class="input-panel">
+
+    <div>
+      <div class="sec-title">Targets</div>
+      <textarea id="targetInput" class="target-textarea"
+        placeholder="sub.example.com&#10;blog.example.com&#10;shop.example.com&#10;&#10;One per line"></textarea>
+    </div>
+
+    <div>
+      <div class="sec-title">Options</div>
+      <div class="options-grid">
+        <div class="option-row">
+          <span class="opt-label">Concurrency</span>
+          <select class="opt-select" id="concurrency">
+            <option value="3">3 (default)</option>
+            <option value="5">5 (faster)</option>
+            <option value="10">10 (aggressive)</option>
+            <option value="1">1 (slow)</option>
+          </select>
+        </div>
+        <label class="cb-row"><input type="checkbox" id="checkA" checked> Check A record (resolves?)</label>
+        <label class="cb-row"><input type="checkbox" id="tryFetch" checked> Try HTTP fingerprint</label>
+      </div>
+    </div>
+
+    <div>
+      <button class="run-btn" id="runBtn" onclick="startScan()">
+        <span>▶</span> Run Scan
+      </button>
+      <button class="stop-btn" id="stopBtn" onclick="stopScan()">✕ Stop</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressText">0 / 0</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    </div>
+
+    <div>
+      <div class="sec-title">Known Services</div>
+      <div class="fp-list" id="fpList"></div>
+    </div>
+
+  </div>
+
+  <!-- MAIN AREA -->
+  <div class="main-area">
+
+    <div class="stats-strip">
+      <div class="stat-chip all active" id="chipAll" onclick="filterTable('all')">
+        <span class="num" id="cntAll">0</span><span style="color:var(--muted)">total</span>
+      </div>
+      <div class="stat-chip vuln" id="chipVuln" onclick="filterTable('vuln')">
+        <span class="dot"></span><span class="num" id="cntVuln">0</span><span style="color:var(--muted)">vulnerable</span>
+      </div>
+      <div class="stat-chip potential" id="chipPot" onclick="filterTable('potential')">
+        <span class="dot"></span><span class="num" id="cntPot">0</span><span style="color:var(--muted)">potential</span>
+      </div>
+      <div class="stat-chip safe" id="chipSafe" onclick="filterTable('safe')">
+        <span class="dot"></span><span class="num" id="cntSafe">0</span><span style="color:var(--muted)">safe</span>
+      </div>
+      <div class="stat-chip err" id="chipErr" onclick="filterTable('error')">
+        <span class="dot"></span><span class="num" id="cntErr">0</span><span style="color:var(--muted)">error</span>
+      </div>
+      <button class="export-btn" onclick="exportCSV()">↓ Export CSV</button>
+    </div>
+
+    <div class="table-wrap" id="tableWrap">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">◈</div>
+        <div class="empty-t">No scan results yet</div>
+        <div class="empty-s">Enter subdomains and click Run Scan</div>
+      </div>
+      <table id="resultsTable" style="display:none">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>DOMAIN</th>
+            <th>CNAME</th>
+            <th>SERVICE</th>
+            <th>STATUS</th>
+            <th>DETAILS</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── FINGERPRINTS DB ──
+const SERVICES = [
+  { name:'GitHub Pages',   color:'#6e7681', cnames:['github.io','github.com'],           fp:'There isn\'t a GitHub Pages site here' },
+  { name:'Heroku',         color:'#6762a6', cnames:['herokudns.com','herokuapp.com'],      fp:'No such app' },
+  { name:'Shopify',        color:'#96bf48', cnames:['myshopify.com','shopifypreview.com'], fp:'Sorry, this shop is currently unavailable' },
+  { name:'AWS S3',         color:'#ff9900', cnames:['s3.amazonaws.com','s3-website'],      fp:'NoSuchBucket' },
+  { name:'Fastly',         color:'#ff282d', cnames:['fastly.net'],                         fp:'Fastly error: unknown domain' },
+  { name:'Netlify',        color:'#00c7b7', cnames:['netlify.com','netlify.app','netlifyglobalcdn.com'], fp:'Not Found - Request ID' },
+  { name:'Surge.sh',       color:'#ffffff', cnames:['surge.sh'],                           fp:'project not found' },
+  { name:'Tumblr',         color:'#35465c', cnames:['domains.tumblr.com'],                 fp:'Whatever you were looking for doesn\'t live here' },
+  { name:'WordPress.com',  color:'#21759b', cnames:['wordpress.com'],                      fp:'Do you want to register' },
+  { name:'Ghost',          color:'#212121', cnames:['ghost.io'],                           fp:'The thing you were looking for is no longer here' },
+  { name:'Pantheon',       color:'#efdc00', cnames:['pantheonsite.io','getpantheon.com'],  fp:'404 Target Not Found' },
+  { name:'Bitbucket',      color:'#0052cc', cnames:['bitbucket.io'],                       fp:'Repository not found' },
+  { name:'Azure',          color:'#0078d4', cnames:['azurewebsites.net','cloudapp.net','trafficmanager.net','azure.com'], fp:'404 Web Site not found' },
+  { name:'Zendesk',        color:'#03363d', cnames:['zendesk.com'],                        fp:'Help Center Closed' },
+  { name:'Readme.io',      color:'#018ef5', cnames:['readme.io'],                          fp:'Project doesnt exist... yet' },
+  { name:'Helpjuice',      color:'#f0c12f', cnames:['helpjuice.com'],                      fp:'We could not find what you\'re looking for' },
+  { name:'Help Scout',     color:'#1292ee', cnames:['helpscoutdocs.com'],                  fp:'No settings were found for this company' },
+  { name:'Feedpress',      color:'#2eaadc', cnames:['feedpress.me'],                       fp:'The feed has not been found' },
+  { name:'Intercom',       color:'#286efa', cnames:['custom.intercom.help'],               fp:'This page is reserved for artistic dogs' },
+  { name:'Unbounce',       color:'#0073e6', cnames:['unbouncepages.com'],                  fp:'The requested URL was not found' },
+  { name:'Strikingly',     color:'#ff5a60', cnames:['strikinglydns.com'],                  fp:'But if you\'re looking to build your own website' },
+  { name:'Tilda',          color:'#000000', cnames:['tilda.ws'],                           fp:'Please renew your subscription' },
+  { name:'Webflow',        color:'#4353ff', cnames:['proxy.webflow.com','webflow.io'],     fp:'The page you are looking for doesn\'t exist' },
+  { name:'Cargo',          color:'#ff5a00', cnames:['cargocollective.com'],                fp:'404 Not Found' },
+  { name:'Fly.io',         color:'#7c3aed', cnames:['fly.dev'],                            fp:'404 Not Found' },
+  { name:'Digital Ocean',  color:'#0080ff', cnames:['ondigitalocean.app'],                 fp:'App not found' },
+];
+
+// Render fp list
+const fpList = document.getElementById('fpList');
+SERVICES.forEach(s => {
+  const d = document.createElement('div');
+  d.className = 'fp-item';
+  d.innerHTML = `<span class="fp-dot" style="background:${s.color}"></span><span class="fp-name">${s.name}</span>`;
+  fpList.appendChild(d);
+});
+
+// ── STATE ──
+let rows = [];
+let scanActive = false;
+let stopFlag = false;
+let currentFilter = 'all';
+let rowIndex = 0;
+
+// ── SCAN ──
+async function startScan() {
+  const raw = document.getElementById('targetInput').value.trim();
+  if (!raw) return;
+  const domains = raw.split('\n').map(l => l.trim()).filter(Boolean).map(d => d.replace(/^https?:\/\//,'').split('/')[0]);
+  if (!domains.length) return;
+
+  rows = []; rowIndex = 0; stopFlag = false; scanActive = true;
+  document.getElementById('tbody').innerHTML = '';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('resultsTable').style.display = '';
+  updateCounts();
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('stopBtn').style.display = 'block';
+  document.getElementById('progressWrap').style.display = 'block';
+
+  const concurrency = parseInt(document.getElementById('concurrency').value);
+  const checkA      = document.getElementById('checkA').checked;
+  const tryFetch    = document.getElementById('tryFetch').checked;
+
+  // Pre-add skeleton rows
+  domains.forEach((d, i) => {
+    addRow(i, d, null, null, 'checking', '—', '—');
+  });
+  updateProgress(0, domains.length);
+
+  // Queue with concurrency
+  let idx = 0;
+  let done = 0;
+  async function worker() {
+    while (idx < domains.length && !stopFlag) {
+      const i = idx++;
+      const domain = domains[i];
+      try {
+        const result = await checkDomain(domain, checkA, tryFetch);
+        updateRow(i, result);
+      } catch(e) {
+        updateRow(i, { domain, cname:'—', service:'—', status:'error', details: e.message });
+      }
+      done++;
+      updateProgress(done, domains.length);
+    }
+  }
+  const workers = Array.from({length: concurrency}, () => worker());
+  await Promise.all(workers);
+
+  scanActive = false; stopFlag = false;
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('stopBtn').style.display = 'none';
+}
+
+function stopScan(){
+  stopFlag = true;
+  document.getElementById('stopBtn').textContent = 'Stopping…';
+  setTimeout(()=>{ document.getElementById('stopBtn').style.display='none'; document.getElementById('stopBtn').textContent='✕ Stop'; document.getElementById('runBtn').disabled=false; }, 1500);
+}
+
+// ── CHECK DOMAIN ──
+async function checkDomain(domain, checkA, tryFetch) {
+  // 1. CNAME lookup
+  const cnameData = await dohQuery(domain, 'CNAME');
+  let cname = null;
+  if (cnameData && cnameData.Answer) {
+    const cnameRec = cnameData.Answer.find(a => a.type === 5);
+    if (cnameRec) cname = cnameRec.data.replace(/\.$/, '');
+  }
+
+  // 2. A record lookup
+  let resolves = null;
+  if (checkA) {
+    const aData = await dohQuery(domain, 'A');
+    resolves = !!(aData && aData.Answer && aData.Answer.some(a => a.type === 1));
+  }
+
+  // 3. Match service
+  let matchedService = null;
+  if (cname) {
+    matchedService = SERVICES.find(s => s.cnames.some(c => cname.toLowerCase().includes(c)));
+  }
+
+  // 4. Try HTTP fingerprint
+  let fingerprinted = false;
+  let fpDetail = '';
+  if (tryFetch && matchedService) {
+    try {
+      const res = await Promise.race([
+        fetch(`https://${domain}`, { mode: 'no-cors' }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 5000))
+      ]);
+      // opaque response means server responded (service exists or not)
+      fingerprinted = false; // can't read body in no-cors
+      fpDetail = 'HTTP response received';
+    } catch(e) {
+      if (e.message === 'timeout' || e.message.includes('Failed to fetch')) {
+        fingerprinted = true; // no response — strong indicator
+        fpDetail = 'No HTTP response — service likely unclaimed';
+      }
+    }
+  }
+
+  // 5. Determine status
+  let status, details;
+  if (!cname) {
+    if (resolves === false) {
+      status = 'safe';
+      details = 'No CNAME, no A record';
+    } else {
+      status = 'safe';
+      details = resolves ? 'Resolves directly (A record)' : 'No CNAME found';
+    }
+  } else if (!matchedService) {
+    status = resolves === false ? 'potential' : 'safe';
+    details = `CNAME → ${cname}` + (resolves === false ? ' (DNS not resolving)' : ' (unknown service)');
+  } else {
+    // Known service
+    if (resolves === false && fingerprinted) {
+      status = 'vuln';
+      details = `CNAME → ${cname} | DNS not resolving | ${fpDetail}`;
+    } else if (resolves === false) {
+      status = 'vuln';
+      details = `CNAME → ${cname} | DNS not resolving`;
+    } else if (fingerprinted) {
+      status = 'vuln';
+      details = `CNAME → ${cname} | ${fpDetail}`;
+    } else {
+      status = 'potential';
+      details = `CNAME → ${cname} | Service: ${matchedService.name} | Verify manually`;
+    }
+  }
+
+  return {
+    domain,
+    cname: cname || '—',
+    service: matchedService ? matchedService.name : '—',
+    serviceColor: matchedService ? matchedService.color : null,
+    status,
+    details
+  };
+}
+
+async function dohQuery(name, type) {
+  try {
+    const res = await fetch(`https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${type}`, {
+      headers: { 'Accept': 'application/dns-json' }
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch(e) { return null; }
+}
+
+// ── TABLE ROWS ──
+function addRow(i, domain, cname, service, status, details, serviceColor) {
+  const tr = document.createElement('tr');
+  tr.id = `row-${i}`;
+  tr.dataset.status = status;
+  tr.innerHTML = `
+    <td style="color:var(--muted);font-family:var(--mono);font-size:11px">${i+1}</td>
+    <td class="td-domain">${esc(domain)}</td>
+    <td class="td-cname" id="cname-${i}">—</td>
+    <td class="td-service" id="svc-${i}">—</td>
+    <td id="status-${i}">${statusBadge(status)}</td>
+    <td class="td-details" id="detail-${i}">—</td>`;
+  document.getElementById('tbody').appendChild(tr);
+  applyFilter(tr);
+}
+
+function updateRow(i, r) {
+  const tr = document.getElementById(`row-${i}`);
+  if (!tr) return;
+  tr.dataset.status = r.status;
+  document.getElementById(`cname-${i}`).textContent   = r.cname || '—';
+  document.getElementById(`svc-${i}`).innerHTML       = r.service !== '—'
+    ? `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:${r.serviceColor||'#8b949e'};flex-shrink:0"></span>${esc(r.service)}</span>`
+    : '—';
+  document.getElementById(`status-${i}`).innerHTML    = statusBadge(r.status);
+  document.getElementById(`detail-${i}`).textContent  = r.details || '—';
+
+  rows[i] = r;
+  applyFilter(tr);
+  updateCounts();
+}
+
+function statusBadge(s) {
+  if (s === 'checking') return `<span class="status-badge sb-checking"><span class="spin-sm"></span>checking</span>`;
+  if (s === 'vuln')     return `<span class="status-badge sb-vuln">⚠ VULNERABLE</span>`;
+  if (s === 'potential')return `<span class="status-badge sb-potential">~ POTENTIAL</span>`;
+  if (s === 'safe')     return `<span class="status-badge sb-safe">✓ SAFE</span>`;
+  return `<span class="status-badge sb-error">✕ ERROR</span>`;
+}
+
+function applyFilter(tr) {
+  const s = tr.dataset.status;
+  const show = currentFilter === 'all'
+    || (currentFilter === 'vuln' && s === 'vuln')
+    || (currentFilter === 'potential' && s === 'potential')
+    || (currentFilter === 'safe' && s === 'safe')
+    || (currentFilter === 'error' && s === 'error');
+  tr.style.display = show ? '' : 'none';
+}
+
+function filterTable(f) {
+  currentFilter = f;
+  document.querySelectorAll('.stat-chip').forEach(c => c.classList.remove('active'));
+  document.getElementById('chip' + (f==='all'?'All':f==='vuln'?'Vuln':f==='potential'?'Pot':f==='safe'?'Safe':'Err')).classList.add('active');
+  document.querySelectorAll('#tbody tr').forEach(tr => applyFilter(tr));
+}
+
+function updateCounts() {
+  const trs = [...document.querySelectorAll('#tbody tr')];
+  const counts = { all: trs.length, vuln:0, potential:0, safe:0, error:0 };
+  trs.forEach(tr => {
+    const s = tr.dataset.status;
+    if (s === 'vuln') counts.vuln++;
+    else if (s === 'potential') counts.potential++;
+    else if (s === 'safe') counts.safe++;
+    else if (s === 'error') counts.error++;
+  });
+  document.getElementById('cntAll').textContent  = counts.all;
+  document.getElementById('cntVuln').textContent = counts.vuln;
+  document.getElementById('cntPot').textContent  = counts.potential;
+  document.getElementById('cntSafe').textContent = counts.safe;
+  document.getElementById('cntErr').textContent  = counts.error;
+}
+
+function updateProgress(done, total) {
+  const pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById('progressText').textContent = `${done} / ${total}`;
+  document.getElementById('progressPct').textContent  = pct + '%';
+  document.getElementById('progressFill').style.width = pct + '%';
+}
+
+// ── EXPORT ──
+function exportCSV() {
+  if (!rows.length) return;
+  const header = 'Domain,CNAME,Service,Status,Details';
+  const lines  = rows.filter(Boolean).map(r =>
+    [r.domain, r.cname, r.service, r.status, r.details].map(v => `"${(v||'').replace(/"/g,'""')}"`).join(',')
+  );
+  const blob = new Blob([header + '\n' + lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'subtake-results.csv';
+  a.click();
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
